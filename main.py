@@ -98,7 +98,7 @@ students = [{
   "last_name": "Иванов",
   "date_of_birth": "1998-05-15",
   "email": "ivan.ivanov@example.com",
-  "phone_number": "+7 (123) 456-7890",
+  "phone_number": "+71234567890",
   "address": "г. Москва, ул. Пушкина, д. 10, кв. 5",
   "enrollment_year": 2017,
   "major": "Информатика",
@@ -168,3 +168,7 @@ async def add_student(student: Student):
     students.append(new_student)
     
     return Student(**new_student)
+
+@app.get('/students') 
+async def show_students():
+    return [Student(**student) for student in students]
