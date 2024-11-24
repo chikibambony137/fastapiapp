@@ -1,8 +1,11 @@
 from typing import Optional
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field, field_validator, ValidationError
 from fastapi.responses import FileResponse
 import pgsql
+from enum import Enum
+from datetime import datetime, date
+import re
 
 app = FastAPI()
 
@@ -83,3 +86,85 @@ async def add_book(book: BookAdd):
 async def root(table_name: str):
     result = await app.db_connection.fetch(f"SELECT * FROM {table_name}")
     return {"result": result}
+
+
+
+
+
+
+students = [{
+  "student_id": 1,
+  "first_name": "Иван",
+  "last_name": "Иванов",
+  "date_of_birth": "1998-05-15",
+  "email": "ivan.ivanov@example.com",
+  "phone_number": "+7 (123) 456-7890",
+  "address": "г. Москва, ул. Пушкина, д. 10, кв. 5",
+  "enrollment_year": 2017,
+  "major": "Информатика",
+  "course": 3,
+  "special_notes": "Без особых примет"
+}
+]
+
+
+class Major(str, Enum):
+    informatics = "Информатика"
+    economics = "Экономика"
+    law = "Право"
+    medicine = "Медицина"
+    engineering = "Инженерия"
+    languages = "Языки"
+
+class Student(BaseModel):
+    student_id: int
+    phone_number: str = Field(default=..., description="Номер телефона в международном формате, начинающийся с '+'")
+    first_name: str = Field(default=..., min_length=1, max_length=50, description="Имя студента, от 1 до 50 символов")
+    last_name: str = Field(default=..., min_length=1, max_length=50, description="Фамилия студента, от 1 до 50 символов")
+    date_of_birth: date = Field(default=..., description="Дата рождения студента в формате ГГГГ-ММ-ДД")
+    email: EmailStr = Field(default=..., description="Электронная почта студента")
+    address: str = Field(default=..., min_length=10, max_length=200, description="Адрес студента, не более 200 символов")
+    enrollment_year: int = Field(default=..., ge=2002, description="Год поступления должен быть не меньше 2002")
+    major: Major = Field(default=..., description="Специальность студента")
+    course: int = Field(default=..., ge=1, le=5, description="Курс должен быть в диапазоне от 1 до 5")
+    special_notes: Optional[str] = Field(default=None, max_length=500, description="Дополнительные заметки, не более 500 символов")
+
+    @field_validator("phone_number")
+    @classmethod
+    def validate_phone_number(cls, values: str) -> str:
+        if not re.match(r'^\+\d{1,15}$', values):
+            raise ValueError('Номер телефона должен начинаться с "+" и содержать от 1 до 15 цифр')
+        return values
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def validate_date_of_birth(cls, values: date):
+        if values and values >= datetime.now().date():
+            raise ValueError('Дата рождения должна быть в прошлом')
+        return values
+    
+
+@app.post('/student')
+async def add_student(student: Student):
+
+    # student = next((studs for studs in students if studs["student_id"] == student.student_id), None)
+    # if not student:
+    #     raise HTTPException(status_code=404, detail="Student not found")
+    
+    new_student_id = len(students) + 1
+    new_student = {
+            "student_id": new_student_id,
+            "first_name": student.first_name,
+            "last_name": student.last_name,
+            "date_of_birth": student.date_of_birth,
+            "email": student.email,
+            "phone_number": student.phone_number,
+            "address": student.address,
+            "enrollment_year": student.enrollment_year,
+            "major": student.major,
+            "course": student.course,
+            "special_notes": student.special_notes
+        }
+    students.append(new_student)
+    
+    return Student(**new_student)
